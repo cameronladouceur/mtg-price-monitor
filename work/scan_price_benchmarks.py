@@ -615,7 +615,7 @@ def main() -> None:
     parser.add_argument("--preview", action="store_true", help="show results without writing a benchmark")
     parser.add_argument("--reseed", action="store_true", help="replace initial benchmarks without alerts")
     parser.add_argument("--idle-only", action="store_true", help="scan only while Windows has been idle at least 10 minutes")
-    parser.add_argument("--cloud", action="store_true", help="save live results without local Windows alerts, local email, or Best Buy browser read")
+    parser.add_argument("--cloud", action="store_true", help="save live results without local Windows alerts or local email")
     args = parser.parse_args()
     if args.cloud and (not args.live or args.idle_only or args.reseed):
         parser.error("--cloud requires --live and cannot be combined with --idle-only or --reseed")
@@ -654,11 +654,6 @@ def main() -> None:
                         continue
                 except ValueError:
                     pass
-            if source["id"] == "amazon":
-                statuses.append({"site": source["site"], "source_url": source_request_url(source),
-                                 "pages": 0, "complete": False, "result": "paused",
-                                 "error": "Amazon helper unavailable on cloud runner"})
-                continue
         is_html = source["id"] in SUPPORTED_IDS
         is_woot = source["id"] == "woot"
         is_target = source["id"] == "target"
@@ -765,7 +760,7 @@ def main() -> None:
         print(source["site"], "pages", status.get("pages", 0),
               "offers", len(found), status.get("error", ""), flush=True)
 
-    if args.live and not args.preview and not args.reseed and not args.cloud:
+    if args.live and not args.preview and not args.reseed:
         if args.idle_only and idle_minutes() < 10:
             log_run(started_at, mode, "interrupted", statuses, offers, precon_offers,
                     error="computer became active before Best Buy clearance read")
@@ -773,6 +768,8 @@ def main() -> None:
             return
         try:
             command = [sys.executable, "-u", str(ROOT / "work" / "bestbuy_clearance_source.py"), "--live-json"]
+            if args.cloud:
+                command.append("--headless")
             if args.idle_only:
                 command.append("--idle-only")
             result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=90,

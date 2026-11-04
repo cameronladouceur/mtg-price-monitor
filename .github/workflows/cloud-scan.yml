@@ -31,6 +31,22 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.14'
+      - name: Install browser and pinned Amazon helper
+        shell: pwsh
+        run: |
+          python -m pip install -r requirements.txt
+          python -m playwright install chromium
+          $base = 'https://github.com/tamnd/amz-cli/releases/download/v0.3.0/'
+          $archiveName = 'amz_0.3.0_windows_amd64.zip'
+          Invoke-WebRequest -Uri ($base + $archiveName) -OutFile amz.zip
+          Invoke-WebRequest -Uri ($base + 'checksums.txt') -OutFile checksums.txt
+          $line = Get-Content checksums.txt | Where-Object { $_ -match ([regex]::Escape($archiveName) + '$') } | Select-Object -First 1
+          if (-not $line) { throw 'Amazon helper checksum missing' }
+          $expected = ($line -split '\s+')[0].ToLowerInvariant()
+          $actual = (Get-FileHash amz.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw 'Amazon helper checksum mismatch' }
+          Expand-Archive amz.zip -DestinationPath work/vendor/amz-cli-bin
+          if (-not (Test-Path work/vendor/amz-cli-bin/amz.exe)) { throw 'Amazon helper binary missing from archive' }
       - name: Scan and save private state
         env:
           CLOUD_SEND_EMAILS: ${{ github.event_name == 'schedule' || inputs.send_emails }}

@@ -24,6 +24,11 @@ STATE_FILES = (
     "price_scan_log.jsonl",
     "new_price_alerts.jsonl",
     "cloud_source_cooldowns.json",
+    "amazon_watchlist.json",
+    "work/amazon_cli_cooldown.json",
+    "work/amazon_watch_cursor.json",
+    "bestbuy_clearance_seen.json",
+    "bestbuy_clearance_email_outbox.json",
 )
 REQUIRED = STATE_FILES[:4]
 
@@ -36,6 +41,7 @@ def save_state(names: tuple[str, ...], message: str) -> None:
     for name in names:
         source = ROOT / name
         if source.is_file():
+            (STATE / name).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, STATE / name)
     staged_files = tuple(name for name in names if (STATE / name).is_file())
     stage = run("git", "-C", str(STATE), "add", "--", *staged_files)
@@ -65,6 +71,7 @@ def main() -> int:
     for name in STATE_FILES:
         source = STATE / name
         if source.is_file():
+            (ROOT / name).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, ROOT / name)
 
     log_path = ROOT / "price_scan_log.jsonl"
@@ -90,16 +97,19 @@ def main() -> int:
     save_state(STATE_FILES, "Save cloud scan state")
     print("Updated private scan history.")
     if os.environ.get("CLOUD_SEND_EMAILS") == "true":
-        from cloud_threshold_email import send_pending
+        from cloud_threshold_email import send_pending, send_bestbuy_pending
         try:
             sent, _ = send_pending()
+            bestbuy_sent = send_bestbuy_pending()
         except Exception:
-            save_state(("threshold_email_outbox.json",), "Save email delivery progress")
+            save_state(("threshold_email_outbox.json", "bestbuy_clearance_email_outbox.json"),
+                       "Save email delivery progress")
             print("Cloud email delivery failed; pending alerts remain in private state.")
             return 1
-        if sent:
-            save_state(("threshold_email_outbox.json",), "Mark threshold emails delivered")
-            print(f"Sent {sent} threshold email alerts.")
+        if sent or bestbuy_sent:
+            save_state(("threshold_email_outbox.json", "bestbuy_clearance_email_outbox.json"),
+                       "Mark email alerts delivered")
+            print(f"Sent {sent} threshold emails and {bestbuy_sent} Best Buy clearance emails.")
     return 0
 
 

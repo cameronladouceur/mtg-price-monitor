@@ -84,7 +84,7 @@ def parse_listing(html: str) -> tuple[list[dict], dict]:
     return products, status
 
 
-def fetch_live(idle_check=None) -> tuple[list[dict], dict]:
+def fetch_live(idle_check=None, *, headless: bool = False) -> tuple[list[dict], dict]:
     """Read paginated SKU tiles and one batch price response per page.
 
     The batch endpoint and same-origin browser fetch come from imoonkey/openweb's
@@ -99,7 +99,8 @@ def fetch_live(idle_check=None) -> tuple[list[dict], dict]:
     expected = None
     pages = 0
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=False, args=["--start-minimized"], timeout=15000)
+        browser = playwright.chromium.launch(headless=headless,
+                                             args=[] if headless else ["--start-minimized"], timeout=15000)
         try:
             page = browser.new_page(locale="en-US", viewport={"width": 1440, "height": 900})
             page.set_default_timeout(8000)
@@ -301,12 +302,14 @@ def main() -> None:
     group.add_argument("--seed-html", type=Path)
     group.add_argument("--probe-batch", action="store_true")
     parser.add_argument("--idle-only", action="store_true")
+    parser.add_argument("--headless", action="store_true")
     args = parser.parse_args()
     if args.probe_batch:
         print(json.dumps(probe_batch_read(), ensure_ascii=False), flush=True)
     elif args.live_json:
         try:
-            products, status = fetch_live((lambda: windows_idle_minutes() >= 10) if args.idle_only else None)
+            products, status = fetch_live((lambda: windows_idle_minutes() >= 10) if args.idle_only else None,
+                                          headless=args.headless)
         except InterruptedError as error:
             print(str(error), flush=True)
             raise SystemExit(3)
