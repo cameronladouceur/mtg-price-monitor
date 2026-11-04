@@ -25,6 +25,7 @@ BENCHMARKS = ROOT / "price_benchmarks.json"
 PRECONS = ROOT / "commander_precons.json"
 PRECON_IMAGES = ROOT / "precon_images.json"
 PRECON_ART = ROOT / "precon_art"
+BOX_ART = ROOT / "box_art"
 LATEST = ROOT / "latest_price_scan.json"
 ALERTS = ROOT / "new_price_alerts.jsonl"
 SCAN_LOG = ROOT / "price_scan_log.jsonl"
@@ -130,6 +131,14 @@ class Handler(BaseHTTPRequestHandler):
         elif re.fullmatch(r"/precon-art/[0-9a-f]{16}\.(?:jpg|png|webp)", self.path):
             filename = self.path.rsplit("/", 1)[-1]
             path = PRECON_ART / filename
+            if not path.is_file():
+                self.send_json(404, {"error": "Image not found"})
+                return
+            content_type = {".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}[path.suffix]
+            self.send_bytes(200, path.read_bytes(), content_type, "public, max-age=86400")
+        elif re.fullmatch(r"/box-art/[0-9a-f]{16}\.(?:jpg|png|webp)", self.path):
+            filename = self.path.rsplit("/", 1)[-1]
+            path = BOX_ART / filename
             if not path.is_file():
                 self.send_json(404, {"error": "Image not found"})
                 return

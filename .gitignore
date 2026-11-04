@@ -10,6 +10,7 @@
 !/work/
 /work/*
 !/work/actions_scan_trial.py
+!/work/cache_box_art.py
 !/work/scan_price_benchmarks.py
 !/work/threshold_outbox.py
 !/work/deliver_threshold_emails.py

@@ -229,7 +229,7 @@
         const art=text('div','', 'box-art');
         const missing=text('span',image?.pending?row.set:'Image unavailable','box-art-empty');
         if(image?.pending)art.classList.add('pending');
-        if(image?.url&&!image.pending&&/^https:\/\//i.test(image.url)){
+        if(image?.url&&!image.pending&&(/\/box-art\/[0-9a-f]{16}\.(?:jpg|png|webp)$/.test(image.url)||/^https:\/\//i.test(image.url))){
           const img=document.createElement('img');
           img.src=image.url; img.alt=`${row.set} ${row.box_type} packaging`;
           img.loading='lazy'; img.decoding='async';
