@@ -10,8 +10,11 @@
 !/work/
 /work/*
 !/work/actions_scan_trial.py
+!/work/actions_cloud_scan.py
+!/work/cloud_threshold_email.py
 !/work/cache_box_art.py
 !/work/scan_price_benchmarks.py
+!/work/starcity_search_request.json
 !/work/threshold_outbox.py
 !/work/deliver_threshold_emails.py
 !/work/html_listing_sources.py
@@ -33,3 +36,4 @@
 !/.github/workflows/
 /.github/workflows/*
 !/.github/workflows/scan-trial.yml
+!/.github/workflows/cloud-scan.yml

@@ -1,0 +1,10 @@
+{
+  "Variant": {"MaxPerPage": 32},
+  "FacetSelections": {
+    "variant_instockonly": ["Yes"],
+    "sealed_type": ["Booster Boxes"]
+  },
+  "MaxPerPage": "96",
+  "CustomUrl": "/mtg/sealed-products/",
+  "ClientData": {"Source": "landing_page"}
+}

@@ -1,0 +1,39 @@
+name: Cloud price scan
+
+on:
+  workflow_dispatch:
+    inputs:
+      send_emails:
+        description: Send queued threshold emails after the scan
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloud-price-scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: cameronladouceur/mtg-price-monitor-data
+          ssh-key: ${{ secrets.MTG_STATE_DEPLOY_KEY }}
+          path: private-state
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Scan and save private state
+        env:
+          CLOUD_SEND_EMAILS: ${{ github.event_name == 'schedule' || inputs.send_emails }}
+          BREVO_SMTP_LOGIN: ${{ secrets.BREVO_SMTP_LOGIN }}
+          BREVO_SMTP_KEY: ${{ secrets.BREVO_SMTP_KEY }}
+          BREVO_SENDER: ${{ secrets.BREVO_SENDER }}
+          ALERT_RECIPIENT: ${{ secrets.ALERT_RECIPIENT }}
+        run: python work/actions_cloud_scan.py

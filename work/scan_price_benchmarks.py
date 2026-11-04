@@ -20,7 +20,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
@@ -49,6 +49,7 @@ SCAN_LOG = ROOT / "price_scan_log.jsonl"
 ACTIVE_SCAN_LOG: dict | None = None
 WINDOWS_OUTBOX = ROOT / "windows_notification_outbox.json"
 SCAN_LOCK = ROOT / "price_scan.lock"
+CLOUD_COOLDOWNS = ROOT / "cloud_source_cooldowns.json"
 PACK_COUNTS = ROOT / "box_pack_counts.json"
 RELEASE_DATES = ROOT / "box_release_dates.json"
 RETAILER_EXCLUSIONS = ROOT / "RETAILER_EXCLUSIONS.json"
@@ -614,7 +615,10 @@ def main() -> None:
     parser.add_argument("--preview", action="store_true", help="show results without writing a benchmark")
     parser.add_argument("--reseed", action="store_true", help="replace initial benchmarks without alerts")
     parser.add_argument("--idle-only", action="store_true", help="scan only while Windows has been idle at least 10 minutes")
+    parser.add_argument("--cloud", action="store_true", help="save live results without local Windows alerts, local email, or Best Buy browser read")
     args = parser.parse_args()
+    if args.cloud and (not args.live or args.idle_only or args.reseed):
+        parser.error("--cloud requires --live and cannot be combined with --idle-only or --reseed")
     started_at = datetime.now(timezone.utc).isoformat()
     mode = "live" if args.live else "offline"
     cache = {}
@@ -630,12 +634,31 @@ def main() -> None:
     ACTIVE_SCAN_LOG = {"started_at": started_at, "mode": mode, "statuses": statuses,
                        "offers": offers, "precon_offers": precon_offers, "logged": False}
     unmatched = []
+    cloud_cooldowns = (json.loads(CLOUD_COOLDOWNS.read_text(encoding="utf-8"))
+                       if args.cloud and CLOUD_COOLDOWNS.exists() else {})
     for source in source_list():
         if args.idle_only and idle_minutes() < 10:
             print("Skipped: computer is active; benchmarks unchanged.")
             if args.live:
                 log_run(started_at, mode, "skipped_active", statuses, offers, precon_offers)
             return
+        if args.cloud:
+            cooldown = cloud_cooldowns.get(source["id"], {})
+            until = cooldown.get("until_utc")
+            if until:
+                try:
+                    if datetime.now(timezone.utc) < datetime.fromisoformat(until):
+                        statuses.append({"site": source["site"], "source_url": source_request_url(source),
+                                         "pages": 0, "complete": False, "result": "paused",
+                                         "skipped_until_utc": until})
+                        continue
+                except ValueError:
+                    pass
+            if source["id"] == "amazon":
+                statuses.append({"site": source["site"], "source_url": source_request_url(source),
+                                 "pages": 0, "complete": False, "result": "paused",
+                                 "error": "Amazon helper unavailable on cloud runner"})
+                continue
         is_html = source["id"] in SUPPORTED_IDS
         is_woot = source["id"] == "woot"
         is_target = source["id"] == "target"
@@ -715,6 +738,13 @@ def main() -> None:
             raise
         status["source_url"] = source_request_url(source)
         status["result"] = classify_source_status(status)
+        if args.cloud:
+            if status.get("http_status") == 429:
+                attempts = min(4, int(cloud_cooldowns.get(source["id"], {}).get("attempts", 0)) + 1)
+                until = datetime.now(timezone.utc) + timedelta(hours=min(24 * 2 ** (attempts - 1), 168))
+                cloud_cooldowns[source["id"]] = {"attempts": attempts, "until_utc": until.isoformat()}
+            elif status.get("complete"):
+                cloud_cooldowns.pop(source["id"], None)
         statuses.append(status)
         if (is_starcity or is_gamenerdz or is_hottopic or is_laughingdragon or is_quickstop) and not status.get("complete"):
             products = []
@@ -735,7 +765,7 @@ def main() -> None:
         print(source["site"], "pages", status.get("pages", 0),
               "offers", len(found), status.get("error", ""), flush=True)
 
-    if args.live and not args.preview and not args.reseed:
+    if args.live and not args.preview and not args.reseed and not args.cloud:
         if args.idle_only and idle_minutes() < 10:
             log_run(started_at, mode, "interrupted", statuses, offers, precon_offers,
                     error="computer became active before Best Buy clearance read")
@@ -782,6 +812,9 @@ def main() -> None:
             log_run(started_at, mode, "preview", statuses, offers, precon_offers)
         return
 
+    if args.cloud:
+        atomic_json(CLOUD_COOLDOWNS, cloud_cooldowns)
+
     now = datetime.now(timezone.utc).isoformat()
     existing = json.loads(BENCHMARKS.read_text(encoding="utf-8")) if BENCHMARKS.exists() else {"version": 1, "boxes": {}}
     saved = existing.setdefault("boxes", {})
@@ -812,7 +845,7 @@ def main() -> None:
         with ALERTS.open("a", encoding="utf-8") as output:
             for alert in new_alerts:
                 output.write(json.dumps(alert, ensure_ascii=False) + "\n")
-    if args.live and not args.reseed:
+    if args.live and not args.reseed and not args.cloud:
         snapshot["windows_notification"] = notify_windows_of_new_lows(new_alerts)
         atomic_json(LATEST, snapshot)
         sent, failed = deliver()
