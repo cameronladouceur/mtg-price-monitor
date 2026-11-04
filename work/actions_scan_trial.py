@@ -6,6 +6,7 @@ import base64
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import time
@@ -56,6 +57,15 @@ def main() -> int:
             print(f"Qualifying box offers: {run.get('box_offer_count', 0)}")
             print(f"Qualifying precon offers: {run.get('precon_offer_count', 0)}")
             print(f"Incomplete sources: {sum(row.get('complete') is False for row in statuses)}")
+            for index, row in enumerate(statuses):
+                if row.get("complete") is not False:
+                    continue
+                error = row.get("error") or ""
+                http = row.get("http_status") or re.search(r"HTTP Error (\d{3})", error)
+                if hasattr(http, "group"):
+                    http = http.group(1)
+                kind = "http " + str(http) if http else error.split(":", 1)[0][:40]
+                print(f"Incomplete source {index}: {row.get('result', 'unknown')}; {kind or 'no error'}")
     if result.returncode:
         print("Scan failed. The full error remains in the temporary runner workspace.")
     return result.returncode
