@@ -1,0 +1,25 @@
+name: Scan runtime trial
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scan-runtime-trial
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Check selected stores and measure runtime
+        env:
+          SCAN_CONFIG_ZLIB_B64: ${{ secrets.SCAN_CONFIG_ZLIB_B64 }}
+        run: python work/actions_scan_trial.py

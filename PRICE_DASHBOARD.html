@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MTG Box Price Watch</title>
+  <script>
+    try { document.documentElement.dataset.theme = localStorage.getItem('mtg-price-theme') === 'light' ? 'light' : 'dark'; }
+    catch { document.documentElement.dataset.theme = 'dark'; }
+  </script>
+  <style>
+    :root { color-scheme:dark; --bg:#101513; --glow:#26352a; --panel:#1a211d; --panel-alt:#17201a; --stat:#172019; --line:#344238; --text:#eef2eb; --muted:#a9b5aa; --gold:#d8b86d; --green:#8ed1a2; --green-hover:#bdf1c8; --red:#e7a59d; --button:#d8b86d; --button-hover:#ebca7e; --button-text:#1c211b; --badge-line:#6c7654; --badge-text:#e3d6a5; --alert-line:#486e50; --alert-bg:#1b2b20; --card-hover:#718973; --shadow:#0002; }
+    :root[data-theme="light"] { color-scheme:light; --bg:#f5f6f1; --glow:#e3eadc; --panel:#ffffff; --panel-alt:#f6f9f3; --stat:#ffffff; --line:#cdd8ca; --text:#1a281d; --muted:#506253; --gold:#81591a; --green:#17633b; --green-hover:#0e482a; --red:#a63632; --button:#d9b86a; --button-hover:#e9c679; --button-text:#1c251c; --badge-line:#a79368; --badge-text:#614c21; --alert-line:#8eb99a; --alert-bg:#e7f4e9; --card-hover:#7b9d83; --shadow:#172b1b12; }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; background:radial-gradient(circle at 90% 0%,var(--glow) 0,transparent 34rem),var(--bg); color:var(--text); }
+    button,input,select { font:inherit; }
+    a { color:var(--green); }
+    a:hover { color:var(--green-hover); }
+    .wrap { max-width:1300px; margin:auto; padding:32px 24px 72px; }
+    h2 { font-size:1.55rem; letter-spacing:-.025em; margin:0; }
+    h3 { font-size:1.16rem; line-height:1.25; margin:0; }
+    p { margin:.4rem 0; }
+    .muted { color:var(--muted); }
+    .top-actions { display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
+    .action-row { display:flex; gap:9px; flex-wrap:wrap; justify-content:flex-end; }
+    .button { border:1px solid var(--badge-line); border-radius:10px; background:var(--button); color:var(--button-text); font-weight:750; padding:11px 18px; cursor:pointer; box-shadow:0 3px 18px var(--shadow); }
+    .button:hover { background:var(--button-hover); }
+    .button:disabled { opacity:.55; cursor:wait; }
+    .theme-button { border:1px solid var(--line); border-radius:10px; background:var(--panel); color:var(--text); font-weight:650; padding:11px 16px; cursor:pointer; }
+    .theme-button:hover { background:var(--panel-alt); border-color:var(--card-hover); }
+    a.theme-button { display:inline-block; text-decoration:none; }
+    :is(button,input,select,summary,a):focus-visible { outline:2px solid var(--gold); outline-offset:3px; }
+    .status { min-height:1.4em; color:var(--muted); font-size:.9rem; text-align:right; }
+    .status:empty { display:none; }
+    .section-heading { display:flex; flex-wrap:wrap; align-items:end; justify-content:space-between; gap:12px; margin:34px 0 15px; }
+    .section-heading.compact { align-items:center; margin:0 0 16px; }
+    .price-meta { display:flex; flex-wrap:wrap; align-items:center; gap:18px; }
+    .price-meta p { margin:0; }
+    .section-heading p { color:var(--muted); font-size:.9rem; }
+    .controls { display:flex; flex-wrap:wrap; gap:10px; margin:0 0 18px; }
+    .tabs { display:flex; gap:8px; margin:19px 0 15px; border-bottom:1px solid var(--line); }
+    .tab { border:0; border-bottom:3px solid transparent; background:transparent; color:var(--muted); padding:10px 14px; cursor:pointer; font-weight:700; }
+    .tab[aria-selected="true"] { color:var(--text); border-bottom-color:var(--gold); }
+    [hidden] { display:none!important; }
+    .control { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:9px; padding:10px 12px; }
+    input.control { flex:1 1 250px; min-width:180px; }
+    select.control { flex:0 1 auto; }
+    .checkbox-control { display:inline-flex; align-items:center; gap:8px; padding:10px 12px; border:1px solid var(--line); border-radius:9px; background:var(--panel); cursor:pointer; white-space:nowrap; }
+    .checkbox-control input { accent-color:var(--green); margin:0; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(285px,1fr)); gap:15px; }
+    .card { display:flex; flex-direction:column; min-height:260px; border:1px solid var(--line); border-radius:15px; padding:20px; background:linear-gradient(145deg,var(--panel),var(--panel-alt)); box-shadow:0 10px 28px var(--shadow); }
+    .card:hover { border-color:var(--card-hover); }
+    .card-head { display:flex; gap:12px; align-items:flex-start; justify-content:space-between; }
+    .box-art { display:flex; align-items:center; justify-content:center; height:190px; margin:16px 0 2px; padding:10px; border:1px solid var(--line); border-radius:11px; background:#f5f5f0; overflow:hidden; }
+    .box-art img { display:block; max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; }
+    .box-art-empty { color:#536057; font-size:.9rem; text-align:center; }
+    .box-art.pending { background:linear-gradient(135deg,#e2e9df,#f5f5f0 58%,#e5eadf); }
+    .box-art.pending .box-art-empty { max-width:18ch; color:#394b3d; font-size:1.25rem; font-weight:750; line-height:1.2; }
+    .badge { flex:none; font-size:.69rem; letter-spacing:.08em; text-transform:uppercase; padding:4px 8px; border-radius:99px; border:1px solid var(--badge-line); color:var(--badge-text); }
+    .preorder-note { margin-top:8px; color:var(--gold); font-size:.84rem; font-weight:700; }
+    .pack-count { margin-top:8px; font-size:.82rem; }
+    .pack-count a { text-decoration:none; }
+    .price { font-size:2.2rem; font-weight:780; letter-spacing:-.04em; color:var(--gold); margin:12px 0 0; line-height:1.05; }
+    .unit-price { color:var(--green); font-size:1.02rem; font-weight:700; margin-top:4px; }
+    .caption { color:var(--muted); font-size:.81rem; }
+    .card-info { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:14px 0; margin:16px 0 0; border-top:1px solid var(--line); }
+    .card-info strong { display:block; font-size:.98rem; font-weight:650; }
+    .card-info span { display:block; color:var(--muted); font-size:.76rem; }
+    .threshold-form { border-top:1px solid var(--line); padding:13px 0; margin-top:2px; }
+    .threshold-form label { display:block; font-size:.83rem; font-weight:650; margin-bottom:6px; }
+    .threshold-row { display:flex; gap:7px; }
+    .threshold-row input { min-width:0; width:100%; background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
+    .threshold-row button { flex:none; white-space:nowrap; border:1px solid var(--line); border-radius:8px; padding:8px 11px; background:var(--panel); color:var(--text); cursor:pointer; }
+    .threshold-row button:hover { border-color:var(--card-hover); }
+    .threshold-status { min-height:1.2em; margin-top:4px; font-size:.76rem; color:var(--muted); }
+    .threshold-status.problem { color:var(--red); }
+    .delivery-note { color:var(--muted); font-size:.84rem; margin:-7px 0 17px; }
+    .card-bottom { margin-top:auto; border-top:1px solid var(--line); padding-top:12px; font-size:.86rem; }
+    .card-bottom a { font-weight:650; text-decoration:none; }
+    .card-bottom small { display:block; color:var(--muted); margin-top:4px; }
+    details { border:1px solid var(--line); background:var(--panel); border-radius:12px; margin-top:14px; }
+    summary { cursor:pointer; padding:13px 16px; font-weight:650; }
+    .detail-body { padding:0 16px 16px; }
+    .offer-list { display:grid; gap:8px; padding:0; margin:0; list-style:none; }
+    .offer-list li { display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; border-top:1px solid var(--line); padding-top:8px; }
+    .alert-list { display:grid; gap:12px; }
+    .alert { display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; border:1px solid var(--alert-line); border-radius:12px; background:var(--alert-bg); padding:16px 18px; }
+    .alert strong { color:var(--green); }
+    .empty { border:1px dashed var(--line); border-radius:13px; padding:25px; color:var(--muted); background:var(--stat); }
+    table { border-collapse:collapse; width:100%; font-size:.9rem; }
+    th,td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); }
+    th { color:var(--muted); font-weight:650; }
+    .table-scroll { overflow:auto; }
+    .scan-log-entry { margin-top:10px; }
+    .scan-log-entry summary { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .scan-log-entry .detail-body { padding-top:4px; }
+    .scan-log-entry .problem { font-weight:700; }
+    .scan-log-more { margin-top:14px; }
+    .ok { color:var(--green); } .problem { color:var(--red); }
+    .foot { border-top:1px solid var(--line); margin-top:40px; padding-top:18px; color:var(--muted); font-size:.83rem; }
+    @media(max-width:700px){ .wrap{padding:22px 14px 50px} .top-actions{align-items:flex-start} .action-row{justify-content:flex-start} .status{text-align:left} .card{min-height:0} }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+      <div class="section-heading compact">
+        <div class="price-meta"><p id="checkedAt">Loading latest scan…</p><p id="visibleCount"></p></div>
+        <div class="top-actions"><div class="action-row"><a class="theme-button" href="#scanLogHeading">Scan log</a><button id="themeToggle" class="theme-button" type="button" aria-label="Switch to light mode">Light mode</button><button id="scanNow" class="button" type="button">Scan now</button></div><div id="scanStatus" class="status" role="status" aria-live="polite"></div></div>
+      </div>
+    <nav class="tabs" role="tablist" aria-label="Product type">
+      <button id="boxesTab" class="tab" type="button" role="tab" aria-selected="true" aria-controls="boxesPanel">Booster boxes</button>
+      <button id="preconsTab" class="tab" type="button" role="tab" aria-selected="false" aria-controls="preconsPanel">Commander precons</button>
+    </nav>
+    <section id="boxesPanel" role="tabpanel" aria-labelledby="boxesTab">
+      <div class="controls">
+        <input id="search" class="control" type="search" placeholder="Search sets or stores" aria-label="Search sets or stores">
+        <select id="typeFilter" class="control" aria-label="Filter box type"><option value="all">All boxes</option><option value="Play Booster Box">Play Booster Boxes</option><option value="Draft Booster Box">Draft Booster Boxes</option></select>
+        <select id="sortBy" class="control" aria-label="Sort boxes"><option value="name">Set name</option><option value="price" selected>Price per box first</option><option value="perPack">Price per pack first</option><option value="recent">Recently lowered</option></select>
+        <label class="checkbox-control"><input id="showPreorders" type="checkbox"> Show preorders</label>
+      </div>
+      <p id="emailDeliveryNote" class="delivery-note">Threshold emails will start after Brevo SMTP is configured.</p>
+      <div id="cards" class="grid"></div>
+    </section>
+    <section id="preconsPanel" role="tabpanel" aria-labelledby="preconsTab" hidden>
+      <div class="controls">
+        <input id="preconSearch" class="control" type="search" placeholder="Search decks, sets or stores" aria-label="Search Commander precons">
+        <select id="preconSort" class="control" aria-label="Sort Commander precons"><option value="price" selected>Lowest price first</option><option value="name">Deck name</option></select>
+      </div>
+      <p class="delivery-note">Only available, named individual decks qualify for email alerts at a price you set. No Windows new-low alerts are sent for precons.</p>
+      <div id="preconCards" class="grid"></div>
+    </section>
+    <section id="boxAlertsSection" aria-labelledby="alertsHeading">
+      <div class="section-heading"><div><h2 id="alertsHeading">New low alerts</h2><p>Only prices below a saved record appear here.</p></div></div>
+      <div id="alerts" class="alert-list"></div>
+    </section>
+    <section aria-labelledby="scanLogHeading">
+      <div class="section-heading"><div><h2 id="scanLogHeading">Scan log</h2><p>Each check shows where prices came from and which stores had problems.</p></div></div>
+      <div id="scanLog" aria-live="polite">Loading scan history…</div>
+      <button id="scanLogMore" class="theme-button scan-log-more" type="button" hidden>Load older scans</button>
+    </section>
+    <footer class="foot">Price per pack is the listed box price divided by the pack count; tax and shipping are not included. Open a store link to check the final price. The scheduled check runs every two hours while this PC is idle; the Scan now button runs an immediate check. This page is available only on this computer.</footer>
+  </main>
+  <script>
+  (() => {
+    'use strict';
+    const $ = id => document.getElementById(id);
+    const money = value => value == null ? '—' : '$' + Number(value).toFixed(2);
+    const perPack = (price, packs) => Number(packs)>0&&Number.isFinite(Number(price))
+      ? money(Math.round(Math.round(Number(price)*100)/Number(packs))/100) : null;
+    const when = value => value ? new Intl.DateTimeFormat('en-US',{dateStyle:'medium',timeStyle:'short',timeZone:'America/New_York'}).format(new Date(value)) : 'Never';
+    const text = (tag, value, className='') => { const e=document.createElement(tag); e.textContent=value; if(className)e.className=className; return e; };
+    const link = (label, url) => { const a=text('a',label); if(/^https?:\/\//i.test(url||'')){a.href=url;a.target='_blank';a.rel='noopener noreferrer';} return a; };
+    const todayEastern = () => {
+      const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'})
+        .formatToParts(new Date()).filter(part=>part.type!=='literal').map(part=>[part.type,part.value]));
+      return `${parts.year}-${parts.month}-${parts.day}`;
+    };
+    const isPreorder = (key,today) => {
+      const date=data.release_dates?.boxes?.[key]?.release_date;
+      return /^\d{4}-\d{2}-\d{2}$/.test(date||'')&&date>today;
+    };
+    const releaseLabel = date => new Intl.DateTimeFormat('en-US',{dateStyle:'medium',timeZone:'UTC'}).format(new Date(`${date}T00:00:00Z`));
+    let data=null, pollTimer=null, activeTab='boxes', scanLogRows=[], scanLogLoaded=false;
+    const excludedCurrencySites=new Set(['facetofacegames.com','hobbiesville.com']);
+
+    function updateThemeButton(){
+      const isLight=document.documentElement.dataset.theme==='light';
+      $('themeToggle').textContent=isLight?'Dark mode':'Light mode';
+      $('themeToggle').setAttribute('aria-label',isLight?'Switch to dark mode':'Switch to light mode');
+      $('themeToggle').setAttribute('aria-pressed',String(isLight));
+    }
+    $('themeToggle').addEventListener('click',()=>{
+      const next=document.documentElement.dataset.theme==='light'?'dark':'light';
+      document.documentElement.dataset.theme=next;
+      try { localStorage.setItem('mtg-price-theme',next); } catch { /* Theme still changes for this visit. */ }
+      updateThemeButton();
+    });
+    updateThemeButton();
+
+    function renderCards(){
+      if(!data)return;
+      const today=todayEastern();
+      const saved=Object.values(data.benchmarks?.boxes||{});
+      const current=data.latest?.current_best||{};
+      const offersByBox=new Map();
+      for(const offer of data.latest?.offers||[]){
+        if(excludedCurrencySites.has(offer.site))continue;
+        if(!offersByBox.has(offer.product_key))offersByBox.set(offer.product_key,[]);
+        offersByBox.get(offer.product_key).push(offer);
+      }
+      const byKey=new Map();
+      for(const alert of data.alerts||[]){if(!byKey.has(alert.product_key))byKey.set(alert.product_key,alert);}
+      let rows=saved.filter(x=>{
+        const q=$('search').value.trim().toLowerCase();
+        return ($('showPreorders').checked||!isPreorder(x.product_key,today))
+          && ($('typeFilter').value==='all'||x.box_type===$('typeFilter').value)
+          && (!q||(x.set+' '+x.box_type+' '+x.site+' '+(current[x.product_key]?.site||'')).toLowerCase().includes(q));
+      });
+      const sort=$('sortBy').value;
+      const unitPrice=row=>{
+        const packs=Number(data.pack_counts?.boxes?.[row.product_key]?.packs)||0;
+        const amount=Number(row.listed_price);
+        return packs>0&&Number.isFinite(amount)?amount/packs:Infinity;
+      };
+      rows.sort((a,b)=>{
+        if(sort==='price')return Number(a.listed_price)-Number(b.listed_price)||a.set.localeCompare(b.set);
+        if(sort==='perPack'){
+          const first=unitPrice(a), second=unitPrice(b);
+          return (first===second?0:first-second)||a.set.localeCompare(b.set);
+        }
+        if(sort==='recent')return String(b.lowest_seen_utc).localeCompare(String(a.lowest_seen_utc))||a.set.localeCompare(b.set);
+        return a.set.localeCompare(b.set)||a.box_type.localeCompare(b.box_type);
+      });
+      if(activeTab==='boxes')$('visibleCount').textContent=`Showing ${rows.length} of ${saved.length}`;
+      const fragment=document.createDocumentFragment();
+      for(const row of rows){
+        const card=document.createElement('article'); card.className='card';
+        const head=text('div','', 'card-head');
+        head.append(text('h3',row.set),text('span',row.box_type.startsWith('Play')?'Play':'Draft','badge'));
+        card.append(head);
+        if(isPreorder(row.product_key,today)){
+          const date=data.release_dates.boxes[row.product_key].release_date;
+          card.append(text('div',`Preorder · releases ${releaseLabel(date)}`,'preorder-note'));
+        }
+        const image=data.images?.[row.product_key];
+        const packInfo=data.pack_counts?.boxes?.[row.product_key];
+        const packs=Number(packInfo?.packs)||0;
+        const art=text('div','', 'box-art');
+        const missing=text('span',image?.pending?row.set:'Image unavailable','box-art-empty');
+        if(image?.pending)art.classList.add('pending');
+        if(image?.url&&!image.pending&&/^https:\/\//i.test(image.url)){
+          const img=document.createElement('img');
+          img.src=image.url; img.alt=`${row.set} ${row.box_type} packaging`;
+          img.loading='lazy'; img.decoding='async';
+          img.addEventListener('error',()=>art.replaceChildren(missing),{once:true});
+          art.append(img);
+        }else art.append(missing);
+        card.append(art);
+        const countLine=text('div','', 'pack-count');
+        if(packs)countLine.append(link(`${packs} packs per box ↗`,packInfo.source_url));
+        else countLine.append(text('span','Pack count not yet verified','muted'));
+        card.append(countLine,text('div',money(row.listed_price),'price'));
+        if(packs)card.append(text('div',`${perPack(row.listed_price,packs)} per pack`,'unit-price'));
+        card.append(text('div','Lowest price saved','caption'));
+        const info=text('div','', 'card-info');
+        const now=current[row.product_key]; const prior=byKey.get(row.product_key);
+        const one=document.createElement('div'); one.append(text('strong',now?money(now.listed_price):'Not listed'),text('span',now&&packs?`Current · ${perPack(now.listed_price,packs)}/pack`:'Current lowest'));
+        const two=document.createElement('div'); two.append(text('strong',prior?money(prior.previous_low):'—'),text('span',prior&&packs?`Previous · ${perPack(prior.previous_low,packs)}/pack`:'Previous low'));
+        info.append(one,two); card.append(info);
+        card.append(thresholdControl(row));
+        const bottom=text('div','', 'card-bottom');
+        bottom.append(link(`Saved low at ${row.site} ↗`,row.url));
+        if(now&&now.url!==row.url){bottom.append(document.createElement('br'),link(`Current best at ${now.site} ↗`,now.url));}
+        bottom.append(text('small',`Last checked ${when(data.latest?.scanned_at_utc)}`));
+        card.append(bottom);
+        const comparisons=(offersByBox.get(row.product_key)||[]).sort((a,b)=>Number(a.listed_price)-Number(b.listed_price));
+        if(comparisons.length>1){
+          const details=document.createElement('details');
+          details.append(text('summary',`Compare ${comparisons.length} current store offers`));
+          const body=text('div','', 'detail-body'); const list=text('ul','', 'offer-list');
+          for(const offer of comparisons){const line=document.createElement('li');line.append(text('strong',money(offer.listed_price)+(packs?` · ${perPack(offer.listed_price,packs)}/pack`:'')),link(offer.site+' ↗',offer.url));list.append(line);}
+          body.append(list);details.append(body);card.append(details);
+        }
+        fragment.append(card);
+      }
+      $('cards').replaceChildren(fragment);
+      if(!rows.length)$('cards').append(text('div','No boxes match these filters.','empty'));
+    }
+
+    const thresholdDrafts=new Map();
+    function thresholdControl(row,kind='boxes'){
+      const key=row.product_key;
+      const saved=data.thresholds?.[kind]?.[key];
+      const form=text('form','', 'threshold-form');
+      const fieldId='threshold-'+Array.from(key).map(char=>char.codePointAt(0).toString(16)).join('-');
+      const label=text('label','Email alert at or below'); label.htmlFor=fieldId;
+      const input=document.createElement('input');
+      input.id=fieldId; input.type='number'; input.min='0.01'; input.max='100000'; input.step='0.01';
+      input.placeholder=kind==='precons'?'Deck price in $':'Box price in $'; input.setAttribute('aria-label',`Email price threshold for ${key}`);
+      input.value=thresholdDrafts.has(key)?thresholdDrafts.get(key):(saved||'');
+      input.addEventListener('input',()=>thresholdDrafts.set(key,input.value));
+      const button=text('button',saved?'Save':'Set alert'); button.type='submit';
+      const rowControls=text('div','', 'threshold-row'); rowControls.append(input,button);
+      if(saved){
+        const remove=text('button','Remove'); remove.type='button';
+        remove.addEventListener('click',()=>saveThreshold(key,null,form,kind));
+        rowControls.append(remove);
+      }
+      const status=text('div',saved?`Saved at ${money(saved)} per ${kind==='precons'?'deck':'box'}${data.email_delivery_ready?'':' · email setup pending'}`:'No threshold set','threshold-status');
+      form.append(label,rowControls,status);
+      form.addEventListener('submit',event=>{event.preventDefault();saveThreshold(key,input.value,form,kind);});
+      return form;
+    }
+
+    async function saveThreshold(key,amount,form,kind){
+      const status=form.querySelector('.threshold-status');
+      const buttons=form.querySelectorAll('button');
+      buttons.forEach(button=>button.disabled=true);
+      status.textContent='Saving…'; status.classList.remove('problem');
+      try{
+        const response=await fetch('/api/thresholds',{method:'POST',headers:{'Content-Type':'application/json','X-Local-Dashboard':'1'},
+          body:JSON.stringify({product_key:key,threshold:amount})});
+        const result=await response.json();
+        if(!response.ok)throw new Error(result.error||`HTTP ${response.status}`);
+        if(!data.thresholds)data.thresholds={boxes:{},precons:{}};
+        if(!data.thresholds[kind])data.thresholds[kind]={};
+        if(result.threshold==null)delete data.thresholds[kind][key];
+        else data.thresholds[kind][key]=result.threshold;
+        thresholdDrafts.delete(key);
+        renderCards();renderPrecons();
+      }catch(error){status.textContent=error.message;status.classList.add('problem');buttons.forEach(button=>button.disabled=false);}
+    }
+
+    function renderPrecons(){
+      if(!data)return;
+      const saved=Object.values(data.precons?.decks||{});
+      const current=data.latest?.current_precons||{};
+      const offersByDeck=new Map();
+      for(const offer of data.latest?.precon_offers||[]){
+        if(excludedCurrencySites.has(offer.site))continue;
+        if(!offersByDeck.has(offer.product_key))offersByDeck.set(offer.product_key,[]);
+        offersByDeck.get(offer.product_key).push(offer);
+      }
+      const q=$('preconSearch').value.trim().toLowerCase();
+      const rows=saved.filter(row=>!q||`${row.set} ${row.deck_name} ${row.site} ${current[row.product_key]?.site||''}`.toLowerCase().includes(q));
+      if(activeTab==='precons')$('visibleCount').textContent=`Showing ${rows.length} of ${saved.length}`;
+      rows.sort((a,b)=>{
+        if($('preconSort').value==='name')return a.deck_name.localeCompare(b.deck_name)||a.set.localeCompare(b.set);
+        return Number(current[a.product_key]?.listed_price??Infinity)-Number(current[b.product_key]?.listed_price??Infinity)
+          ||a.deck_name.localeCompare(b.deck_name);
+      });
+      const fragment=document.createDocumentFragment();
+      for(const row of rows){
+        const now=current[row.product_key];
+        const card=text('article','', 'card');
+        const head=text('div','', 'card-head');
+        head.append(text('h3',row.deck_name),text('span','Commander','badge'));
+        card.append(head,text('div',row.set,'muted'));
+        const art=text('div','', 'box-art');
+        const image=data.precon_images?.[row.product_key]?.url||now?.image_url||row.image_url;
+        const missing=text('span','Image unavailable','box-art-empty');
+        if(/^\/precon-art\/[0-9a-f]{16}\.(?:jpg|png|webp)$/.test(image||'')||/^https:\/\/cdn\.shopify\.com\//i.test(image||'')){
+          const img=document.createElement('img');img.src=image;img.alt=`${row.deck_name} Commander deck packaging`;
+          img.loading='lazy';img.decoding='async';
+          img.addEventListener('error',()=>art.replaceChildren(missing),{once:true});art.append(img);
+        }else art.append(missing);
+        card.append(art);
+        card.append(text('div',now?money(now.listed_price):'—','price'));
+        card.append(text('div',now?`Lowest available listing at ${now.site}`:
+          (data.latest?.current_precons?'No available listing found in the latest scan':'Awaiting next scan'),'caption'));
+        card.append(thresholdControl(row,'precons'));
+        const bottom=text('div','', 'card-bottom');
+        if(now)bottom.append(link(`Available at ${now.site} ↗`,now.url));
+        else if(row.url)bottom.append(link(`Last seen at ${row.site} ↗`,row.url));
+        else bottom.append(text('span','No store listing found yet','muted'));
+        bottom.append(text('small',now?`Last checked ${when(data.latest?.scanned_at_utc)}`:
+          (row.last_seen_utc?`Last available listing seen ${when(row.last_seen_utc)}`:'Awaiting first scan')));
+        card.append(bottom);
+        const comparisons=(offersByDeck.get(row.product_key)||[]).sort((a,b)=>Number(a.listed_price)-Number(b.listed_price));
+        if(comparisons.length>1){
+          const details=document.createElement('details');details.append(text('summary',`Compare ${comparisons.length} available offers`));
+          const body=text('div','', 'detail-body');const list=text('ul','', 'offer-list');
+          for(const offer of comparisons){const line=document.createElement('li');line.append(text('strong',money(offer.listed_price)),link(offer.site+' ↗',offer.url));list.append(line);}
+          body.append(list);details.append(body);card.append(details);
+        }
+        fragment.append(card);
+      }
+      $('preconCards').replaceChildren(fragment);
+      if(!rows.length)$('preconCards').append(text('div',saved.length?'No decks match this search.':'No named Commander decks have been found yet. Run a scan to check selected stores.','empty'));
+    }
+
+    function renderAlerts(){
+      if(!data)return;
+      const today=todayEastern();
+      const alerts=(data.alerts||[]).filter(row=>$('showPreorders').checked||!isPreorder(row.product_key,today));
+      const fragment=document.createDocumentFragment();
+      for(const row of alerts.slice(0,30)){
+        const item=text('article','', 'alert'); const left=document.createElement('div');
+        const packs=Number(data.pack_counts?.boxes?.[row.product_key]?.packs)||0;
+        left.append(text('strong',`${row.set} · ${row.box_type}`),text('div',`${money(row.previous_low)} → ${money(row.listed_price)} at ${row.site}${packs?` · ${perPack(row.listed_price,packs)}/pack (${packs} packs)`:''}`),text('small',when(row.observed_at_utc),'muted'));
+        item.append(left,link('View offer ↗',row.url)); fragment.append(item);
+      }
+      $('alerts').replaceChildren(fragment);
+      if(!alerts.length)$('alerts').append(text('div','No new low alerts yet. The first scan established the starting benchmarks.','empty'));
+    }
+
+    function renderScanLog(total){
+      const fragment=document.createDocumentFragment();
+      for(const run of scanLogRows){
+        const entry=text('details','', 'scan-log-entry');
+        const summary=text('summary',`${when(run.finished_at_utc)} · ${run.outcome||'unknown'}${run.backfilled_from_latest?' (imported from last scan)':''} · ${run.source_count||0} stores · ${run.issue_count||0} issues · ${run.box_offer_count||0} box offers · ${run.precon_offer_count||0} precons · ${run.new_low_count||0} new lows`,
+          run.issue_count||run.outcome==='failed'?'problem':'');
+        entry.append(summary);
+        const body=text('div','', 'detail-body');
+        if(run.error)body.append(text('p',run.error,'problem'));
+        const tableWrap=text('div','', 'table-scroll');
+        const table=document.createElement('table');
+        const head=document.createElement('thead');const heading=document.createElement('tr');
+        for(const label of ['Store','Data source','Pages / checks','Products / eligible','Box offers','Precons','Result'])heading.append(text('th',label));
+        head.append(heading);table.append(head);
+        const tbody=document.createElement('tbody');
+        for(const row of run.sources||[]){
+          const tr=document.createElement('tr');
+          const source=document.createElement('td');
+          if(row.source_url)source.append(link('Open feed ↗',row.last_request_url||row.source_url));
+          else source.textContent='—';
+          let result=row.result||'unknown';
+          if(row.http_status)result+=` · HTTP ${row.http_status}`;
+          if(row.error)result+=` · ${row.error}`;
+          if(row.skipped_until_utc)result+=` · paused until ${when(row.skipped_until_utc)}`;
+          if(row.limited_to_first_page&&!row.error)result+=' · first page only';
+          const amazon=row.site==='Amazon'&&String(row.format||'').startsWith('amz-cli');
+          if(amazon&&!row.checks?.length&&Number(row.pages)>Number(row.products))result+=' · individual skip reasons were not saved for this older scan';
+          const resultCell=text('td',result,['blocked','error','partial','interrupted'].includes(row.result)?'problem':'ok');
+          if(amazon&&row.checks?.length){
+            const checks=document.createElement('details');checks.append(text('summary',`Show ${row.checks.length} watched products`));
+            const list=text('ul','', 'offer-list');
+            for(const check of row.checks){
+              const item=document.createElement('li');
+              item.append(link(check.asin+' ↗',check.url),text('span',`${check.result}${check.reason?' · '+check.reason:''}${check.title?' · '+check.title:''}`));
+              list.append(item);
+            }
+            const detail=text('div','', 'detail-body');detail.append(list);checks.append(detail);resultCell.append(checks);
+          }
+          if(row.unmatched_titles){
+            const unmatched=document.createElement('details');
+            unmatched.append(text('summary',`${row.unmatched_titles} unmatched box titles`));
+            const detail=text('div','', 'detail-body');
+            for(const title of row.unmatched_sample||[])detail.append(text('p',title));
+            unmatched.append(detail);resultCell.append(unmatched);
+          }
+          tr.append(text('td',row.site||'Unknown'),source,text('td',String(row.pages??0)),
+            text('td',amazon?`${row.products??0} eligible`:String(row.products??0)),text('td',String(row.box_offers??0)),
+            text('td',String(row.precon_offers??0)),resultCell);
+          tbody.append(tr);
+        }
+        table.append(tbody);tableWrap.append(table);body.append(tableWrap);
+        if(run.new_lows?.length){
+          const lows=text('p','New lows: ');
+          for(const [index,row] of run.new_lows.entries()){
+            if(index)lows.append(document.createTextNode(' · '));
+            lows.append(link(`${row.set} ${row.box_type} ${money(row.listed_price)} ↗`,row.url));
+          }
+          body.append(lows);
+        }
+        entry.append(body);fragment.append(entry);
+      }
+      $('scanLog').replaceChildren(fragment);
+      if(!scanLogRows.length)$('scanLog').append(text('div','No scan history yet. The next check will create the first entry.','empty'));
+      $('scanLogMore').hidden=scanLogRows.length>=total;
+    }
+
+    async function loadScanLog(reset=false){
+      const offset=reset?0:scanLogRows.length;
+      try{
+        const response=await fetch(`/api/scan-log?offset=${offset}`,{cache:'no-store'});
+        if(!response.ok)throw new Error(`HTTP ${response.status}`);
+        const page=await response.json();
+        scanLogRows=reset?page.records:scanLogRows.concat(page.records);
+        scanLogLoaded=true;renderScanLog(page.total);
+      }catch(error){$('scanLog').textContent='Could not load scan log: '+error.message;}
+    }
+    $('scanLogMore').addEventListener('click',()=>loadScanLog());
+
+    function render(){
+      $('checkedAt').textContent=`Last checked ${when(data.latest?.scanned_at_utc)}`;
+      const pending=Number(data.pending_threshold_emails)||0;
+      const emailError=data.email_delivery_status?.last_error;
+      $('emailDeliveryNote').textContent=emailError&&data.email_delivery_ready
+        ? `Brevo email delivery failed: ${emailError}`
+        : data.email_delivery_ready
+          ? pending?`${pending} qualifying ${pending===1?'alert is':'alerts are'} queued for email.`:'Threshold emails are enabled through Brevo.'
+          : pending?`${pending} qualifying ${pending===1?'alert is':'alerts are'} queued. Brevo email setup is pending.`
+            :'Threshold emails will start after Brevo SMTP is configured.';
+      $('scanNow').disabled=!!data.running;
+      if(data.running)$('scanStatus').textContent='Scanning stores sequentially…';
+      else if(data.last_scan_error)$('scanStatus').textContent=data.last_scan_error;
+      else if(data.latest?.windows_notification?.error)$('scanStatus').textContent=`Windows notification failed; saved for retry: ${data.latest.windows_notification.error}`;
+      else if(data.last_scan_finished)$('scanStatus').textContent=`Scan finished ${when(data.last_scan_finished)}`;
+      else $('scanStatus').textContent='';
+      renderCards(); renderPrecons(); renderAlerts();
+    }
+
+    function setTab(tab){
+      activeTab=tab;
+      $('boxesPanel').hidden=tab!=='boxes';
+      $('preconsPanel').hidden=tab!=='precons';
+      $('boxAlertsSection').hidden=tab!=='boxes';
+      $('boxesTab').setAttribute('aria-selected',String(tab==='boxes'));
+      $('preconsTab').setAttribute('aria-selected',String(tab==='precons'));
+      if(data){renderCards();renderPrecons();}
+    }
+
+    async function load(){
+      try{
+        const response=await fetch('/api/state',{cache:'no-store'});
+        if(!response.ok)throw new Error(`HTTP ${response.status}`);
+        const wasRunning=!!data?.running;
+        data=await response.json(); render();
+        if(!scanLogLoaded||wasRunning&&!data.running)loadScanLog(true);
+        if(data.running&&!pollTimer)pollTimer=setInterval(load,1800);
+        if(!data.running&&pollTimer){clearInterval(pollTimer);pollTimer=null;}
+      }catch(error){$('scanStatus').textContent='Could not load dashboard data: '+error.message;}
+    }
+    $('scanNow').addEventListener('click',async()=>{
+      $('scanNow').disabled=true; $('scanStatus').textContent='Starting scan…';
+      try{
+        const response=await fetch('/api/scan',{method:'POST',headers:{'X-Local-Dashboard':'1'}});
+        if(!response.ok){const body=await response.json();throw new Error(body.error||`HTTP ${response.status}`);}
+        await load();
+      }catch(error){$('scanNow').disabled=false;$('scanStatus').textContent=error.message;}
+    });
+    for(const id of ['search','typeFilter','sortBy'])$(id).addEventListener(id==='search'?'input':'change',renderCards);
+    $('preconSearch').addEventListener('input',renderPrecons);
+    $('preconSort').addEventListener('change',renderPrecons);
+    $('boxesTab').addEventListener('click',()=>setTab('boxes'));
+    $('preconsTab').addEventListener('click',()=>setTab('precons'));
+    $('showPreorders').addEventListener('change',()=>{renderCards();renderAlerts();});
+    load(); setInterval(()=>{if(!data?.running)load();},60000);
+  })();
+  </script>
+</body>
+</html>

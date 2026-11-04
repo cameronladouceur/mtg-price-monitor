@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "boxes": {
+    "Star Trek | Play Booster Box": {
+      "release_date": "2026-11-13",
+      "source_url": "https://magic.wizards.com/en/news/feature/collecting-star-trek"
+    },
+    "Nauctis: The Sunken Realm | Play Booster Box": {
+      "release_date": "2027-02-05",
+      "source_url": "https://magic.wizards.com/en/news/announcements/everything-announced-for-the-magic-multiverse-in-2027"
+    },
+    "Marvel Darkhold Destiny | Play Booster Box": {
+      "release_date": "2027-04-09",
+      "source_url": "https://magic.wizards.com/en/products/marvel/marvel-darkhold-destiny"
+    },
+    "Kamigawa Titanbreach | Play Booster Box": {
+      "release_date": "2027-06-04",
+      "source_url": "https://magic.wizards.com/en/products/kamigawa-titanbreach"
+    },
+    "Zhalfir | Play Booster Box": {
+      "release_date": "2027-10-01",
+      "source_url": "https://magic.wizards.com/en/news/announcements/everything-announced-for-the-magic-multiverse-in-2027"
+    }
+  }
+}
