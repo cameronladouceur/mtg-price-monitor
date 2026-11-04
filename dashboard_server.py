@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import argparse
-from collections import deque
 import json
 import re
 import subprocess
 import sys
 import threading
+import time
 import urllib.request
 import webbrowser
 from datetime import datetime, timezone
@@ -17,6 +17,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from work.commander_precons import catalog_rows
+from work import cloud_state_sync
 
 
 ROOT = Path(__file__).resolve().parent
@@ -45,6 +46,10 @@ settings_lock = threading.Lock()
 scan_process: subprocess.Popen | None = None
 last_scan_finished: str | None = None
 last_scan_error: str | None = None
+cloud_lock = threading.Lock()
+cloud_sync_running = False
+cloud_sync_at = 0.0
+cloud_sync_error: str | None = None
 
 
 def read_json(path: Path, fallback: dict) -> dict:
@@ -70,32 +75,73 @@ def normalized_threshold(value: object) -> str | None:
 
 
 def read_alerts() -> list[dict]:
-    if not ALERTS.exists():
-        return []
     rows = []
-    for line in ALERTS.read_text(encoding="utf-8").splitlines():
-        try:
-            rows.append(json.loads(line))
-        except json.JSONDecodeError:
-            continue
-    return list(reversed(rows[-100:]))
+    for path in (ALERTS, cloud_state_sync.CHECKOUT / ALERTS.name):
+        if path.exists():
+            for line in path.read_text(encoding="utf-8").splitlines():
+                try:
+                    rows.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    unique = {json.dumps(row, sort_keys=True): row for row in rows}
+    return sorted(unique.values(), key=lambda row: row.get("observed_at_utc", ""), reverse=True)[:100]
 
 
 def read_scan_log(offset: int = 0, limit: int = 20) -> dict:
-    if not SCAN_LOG.exists():
-        return {"records": [], "total": 0}
-    recent = deque(maxlen=offset + limit)
-    total = 0
-    with SCAN_LOG.open("r", encoding="utf-8") as stream:
-        for line in stream:
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(row, dict):
-                recent.append(row)
-                total += 1
-    return {"records": list(reversed(recent))[offset:offset + limit], "total": total}
+    records = []
+    for path in (SCAN_LOG, cloud_state_sync.CHECKOUT / SCAN_LOG.name):
+        if path.exists():
+            for line in path.read_text(encoding="utf-8").splitlines():
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(row, dict):
+                    records.append(row)
+    unique = {row.get("started_at_utc", "") + row.get("mode", ""): row for row in records}
+    ordered = sorted(unique.values(), key=lambda row: row.get("finished_at_utc", ""), reverse=True)
+    return {"records": ordered[offset:offset + limit], "total": len(ordered)}
+
+
+def latest_display_state() -> tuple[dict, dict, dict]:
+    local = read_json(LATEST, {})
+    cloud = read_json(cloud_state_sync.CHECKOUT / LATEST.name, {})
+    def timestamp(value: dict) -> float:
+        try:
+            return datetime.fromisoformat(value.get("scanned_at_utc", "")).timestamp()
+        except (ValueError, TypeError):
+            return 0.0
+    if timestamp(cloud) > timestamp(local):
+        checkout = cloud_state_sync.CHECKOUT
+        return (cloud, read_json(checkout / BENCHMARKS.name, {"boxes": {}}),
+                read_json(checkout / PRECONS.name, {"decks": catalog_rows()}))
+    return (local, read_json(BENCHMARKS, {"boxes": {}}),
+            read_json(PRECONS, {"decks": catalog_rows()}))
+
+
+def cloud_sync_worker() -> None:
+    global cloud_sync_running, cloud_sync_at, cloud_sync_error
+    try:
+        with cloud_lock:
+            cloud_state_sync.sync()
+        error = None
+    except (OSError, RuntimeError, subprocess.TimeoutExpired) as failure:
+        error = str(failure)
+    with cloud_lock:
+        cloud_sync_error = error
+        cloud_sync_at = time.monotonic()
+        cloud_sync_running = False
+
+
+def start_cloud_sync() -> None:
+    global cloud_sync_running
+    if not cloud_state_sync.available():
+        return
+    with cloud_lock:
+        if cloud_sync_running or time.monotonic() - cloud_sync_at < 300:
+            return
+        cloud_sync_running = True
+    threading.Thread(target=cloud_sync_worker, daemon=True).start()
 
 
 def scan_worker(process: subprocess.Popen) -> None:
@@ -146,15 +192,17 @@ class Handler(BaseHTTPRequestHandler):
             self.send_bytes(200, path.read_bytes(), content_type, "public, max-age=86400")
         elif self.path == "/api/state":
             try:
+                start_cloud_sync()
+                latest, benchmarks, precons = latest_display_state()
                 with scan_lock:
                     running = scan_process is not None
                     finished = last_scan_finished
                     error = last_scan_error
                 self.send_json(200, {
-                    "benchmarks": read_json(BENCHMARKS, {"boxes": {}}),
-                    "precons": read_json(PRECONS, {"decks": catalog_rows()}),
+                    "benchmarks": benchmarks,
+                    "precons": precons,
                     "precon_images": read_json(PRECON_IMAGES, {}),
-                    "latest": read_json(LATEST, {}),
+                    "latest": latest,
                     "images": read_json(IMAGES, {}),
                     "pack_counts": read_json(PACK_COUNTS, {"boxes": {}}),
                     "release_dates": read_json(RELEASE_DATES, {"boxes": {}}),
@@ -167,6 +215,7 @@ class Handler(BaseHTTPRequestHandler):
                     "running": running,
                     "last_scan_finished": finished,
                     "last_scan_error": error,
+                    "cloud_sync_error": cloud_sync_error,
                 })
             except (OSError, ValueError) as error:
                 self.send_json(500, {"error": str(error)})
@@ -192,8 +241,9 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("Invalid request size")
                 body = json.loads(self.rfile.read(length))
                 key = body.get("product_key")
-                box_keys = read_json(BENCHMARKS, {"boxes": {}}).get("boxes", {})
-                precon_keys = read_json(PRECONS, {"decks": catalog_rows()}).get("decks", {})
+                _, box_data, precon_data = latest_display_state()
+                box_keys = box_data.get("boxes", {})
+                precon_keys = precon_data.get("decks", {})
                 if not isinstance(key, str) or (key not in box_keys and key not in precon_keys):
                     raise ValueError("Unknown product")
                 group = "precons" if key in precon_keys else "boxes"
@@ -206,9 +256,14 @@ class Handler(BaseHTTPRequestHandler):
                     else:
                         settings[group][key] = amount
                     save_json(THRESHOLDS, settings)
+                    if cloud_state_sync.available():
+                        with cloud_lock:
+                            cloud_state_sync.sync()
                 self.send_json(200, {"product_key": key, "threshold": amount})
-            except (ValueError, OSError, KeyError, AttributeError, TypeError) as error:
+            except (ValueError, KeyError, AttributeError, TypeError) as error:
                 self.send_json(400, {"error": str(error)})
+            except (OSError, RuntimeError, subprocess.TimeoutExpired) as error:
+                self.send_json(503, {"error": "Threshold saved locally, but cloud sync failed: " + str(error)})
             return
         with scan_lock:
             if scan_process is not None:

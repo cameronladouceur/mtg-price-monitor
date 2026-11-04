@@ -12,6 +12,7 @@
 !/work/actions_scan_trial.py
 !/work/actions_cloud_scan.py
 !/work/cloud_threshold_email.py
+!/work/cloud_state_sync.py
 !/work/cache_box_art.py
 !/work/scan_price_benchmarks.py
 !/work/starcity_search_request.json
